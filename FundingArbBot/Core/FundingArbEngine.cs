@@ -1,5 +1,6 @@
 using HieuFundingArbBot.Interfaces;
 using FundingArbBot.Infra;
+
 namespace HieuFundingArbBot.Core
 {
     public class FundingArbEngine
@@ -12,12 +13,15 @@ namespace HieuFundingArbBot.Core
         private readonly int _intervalMs;
         private readonly string _symbol = "BTC-PERP";
 
+        private readonly HyperliquidWsClient _hlWs; // buổi 3
+
         public FundingArbEngine(
             IExchangeClient hl,
             IExchangeClient lighter,
             SpreadDetector detector,
             TradeExecutor executor,
             SimpleLogger logger,
+            HyperliquidWsClient hlWs,
             int intervalMs = 2000)
         {
             _hl = hl;
@@ -25,12 +29,33 @@ namespace HieuFundingArbBot.Core
             _detector = detector;
             _executor = executor;
             _logger = logger;
+            _hlWs = hlWs;
             _intervalMs = intervalMs;
         }
 
         public async Task RunAsync()
         {
             _logger.Info("Engine started. Press Ctrl+C to stop.");
+
+            // ---------------------------------------------------
+            // ⭐ BƯỚC 4 – BẬT WEBSOCKET (đặt NGAY TẠI ĐÂY)
+            // ---------------------------------------------------
+            try
+            {
+                await _hlWs.ConnectAsync();
+                await _hlWs.SubscribeFundingAsync(_symbol);
+
+                _hlWs.FundingEvent += (fr) =>
+                {
+                    _logger.Info($"[WS] HL realtime funding = {fr.Rate}");
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn("[WS] Failed to init WS: " + ex.Message);
+            }
+            // ---------------------------------------------------
+
             var cts = new CancellationTokenSource();
 
             Console.CancelKeyPress += (s, e) =>
@@ -51,7 +76,6 @@ namespace HieuFundingArbBot.Core
                     if (_detector.IsCrossingThreshold(spread))
                     {
                         _logger.Info($"Spread {spread:F6} >= threshold -> executing arb.");
-                        // We short HL, long Lighter (as decided)
                         await _executor.ExecuteArbAsync(_hl.Name, _lighter.Name, 1000.0);
                     }
                     else

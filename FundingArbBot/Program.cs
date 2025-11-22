@@ -21,10 +21,12 @@ class Program
 
         var spreadDetector = new SpreadDetector(logger, config.BotConfig.SpreadThreshold);
         var riskManager = new RiskManager(logger, config.BotConfig.PositionSizeUsd);
+        var hlWs = new HyperliquidWsClient(logger); // buổi 3
+
         var executor = new TradeExecutor(logger, tel, riskManager);
 
         var engine = new FundingArbEngine(
-            hl, lighter, spreadDetector, executor, logger, config.BotConfig.CheckIntervalMs);
+            hl, lighter, spreadDetector, executor, logger,hlWs, config.BotConfig.CheckIntervalMs);
 
         await engine.RunAsync(); // runs until cancelled (Ctrl+C)
     }
