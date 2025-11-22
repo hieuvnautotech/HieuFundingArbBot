@@ -1,5 +1,5 @@
 using HieuFundingArbBot.Models;
-using FundingArbBot.Infra;
+using HieuFundingArbBot.Infra;
 namespace HieuFundingArbBot.Core
 {
     public class SpreadDetector

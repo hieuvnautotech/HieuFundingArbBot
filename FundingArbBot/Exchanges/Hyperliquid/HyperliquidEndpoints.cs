@@ -1,4 +1,4 @@
-namespace FundingArbBot.Exchanges.Hyperliquid
+namespace HieuFundingArbBot.Exchanges.Hyperliquid
 {
     public static class HyperliquidEndpoints
     {

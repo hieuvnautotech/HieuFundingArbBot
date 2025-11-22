@@ -1,6 +1,6 @@
 using HieuFundingArbBot.Interfaces;
 using HieuFundingArbBot.Models;
-using FundingArbBot.Infra;
+using HieuFundingArbBot.Infra;
 namespace HieuFundingArbBot.Exchanges
 {
     // MOCK client - simulate lower funding rate

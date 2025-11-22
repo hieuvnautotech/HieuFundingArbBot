@@ -1,4 +1,4 @@
-using FundingArbBot.Infra;
+using HieuFundingArbBot.Infra;
 namespace HieuFundingArbBot.Infra
 {
     public class TelegramNotifier

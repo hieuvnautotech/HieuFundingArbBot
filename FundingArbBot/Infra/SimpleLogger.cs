@@ -1,6 +1,6 @@
 using System;
-using FundingArbBot.Infra;
-namespace FundingArbBot.Infra
+using HieuFundingArbBot.Infra;
+namespace HieuFundingArbBot.Infra
 {
     public class SimpleLogger
     {

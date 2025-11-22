@@ -2,9 +2,10 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Models;
-using Infra;
-namespace FundingArbBot.Exchanges.Hyperliquid
+using HieuFundingArbBot.Infra;      // SimpleLogger
+using HieuFundingArbBot.Models;     // FundingRate
+
+namespace HieuFundingArbBot.Exchanges.Hyperliquid
 {
     public class HyperliquidRestClient
     {

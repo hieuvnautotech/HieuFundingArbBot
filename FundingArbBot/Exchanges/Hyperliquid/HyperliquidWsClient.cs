@@ -1,8 +1,11 @@
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
-using Infra;
-namespace FundingArbBot.Exchanges.Hyperliquid
+using HieuFundingArbBot.Infra;      // SimpleLogger
+using HieuFundingArbBot.Models;     // FundingRate
+using HieuFundingArbBot.Exchanges.Hyperliquid;
+
+namespace HieuFundingArbBot.Exchanges.Hyperliquid
 {
     public class HyperliquidWsClient
     {

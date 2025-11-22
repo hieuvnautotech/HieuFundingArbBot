@@ -1,5 +1,6 @@
 using HieuFundingArbBot.Interfaces;
-using FundingArbBot.Infra;
+using HieuFundingArbBot.Infra;
+using HieuFundingArbBot.Exchanges.Hyperliquid;
 
 namespace HieuFundingArbBot.Core
 {
@@ -11,9 +12,12 @@ namespace HieuFundingArbBot.Core
         private readonly TradeExecutor _executor;
         private readonly SimpleLogger _logger;
         private readonly int _intervalMs;
+
+        // REST dùng BTC-PERP
         private readonly string _symbol = "BTC-PERP";
 
-        private readonly HyperliquidWsClient _hlWs; // buổi 3
+        // WS client
+        private readonly HyperliquidWsClient _hlWs;
 
         public FundingArbEngine(
             IExchangeClient hl,
@@ -37,13 +41,11 @@ namespace HieuFundingArbBot.Core
         {
             _logger.Info("Engine started. Press Ctrl+C to stop.");
 
-            // ---------------------------------------------------
-            // ⭐ BƯỚC 4 – BẬT WEBSOCKET (đặt NGAY TẠI ĐÂY)
-            // ---------------------------------------------------
+            // ⭐ Bật WebSocket real-time funding
             try
             {
                 await _hlWs.ConnectAsync();
-                await _hlWs.SubscribeFundingAsync(_symbol);
+                await _hlWs.SubscribeFundingAsync("BTC");
 
                 _hlWs.FundingEvent += (fr) =>
                 {
@@ -54,7 +56,6 @@ namespace HieuFundingArbBot.Core
             {
                 _logger.Warn("[WS] Failed to init WS: " + ex.Message);
             }
-            // ---------------------------------------------------
 
             var cts = new CancellationTokenSource();
 
@@ -76,6 +77,7 @@ namespace HieuFundingArbBot.Core
                     if (_detector.IsCrossingThreshold(spread))
                     {
                         _logger.Info($"Spread {spread:F6} >= threshold -> executing arb.");
+
                         await _executor.ExecuteArbAsync(_hl.Name, _lighter.Name, 1000.0);
                     }
                     else

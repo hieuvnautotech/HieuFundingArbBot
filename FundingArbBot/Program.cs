@@ -4,7 +4,8 @@ using HieuFundingArbBot.Infra;
 using HieuFundingArbBot.Exchanges;
 using HieuFundingArbBot.Core;
 using HieuFundingArbBot.Interfaces;
-using FundingArbBot.Infra;
+using HieuFundingArbBot.Infra;
+using HieuFundingArbBot.Exchanges.Hyperliquid;
 class Program
 {
     static async Task Main(string[] args)

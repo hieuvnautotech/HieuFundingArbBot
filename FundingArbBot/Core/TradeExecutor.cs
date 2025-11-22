@@ -1,5 +1,5 @@
 using HieuFundingArbBot.Infra;
-using FundingArbBot.Infra;
+using HieuFundingArbBot.Infra;
 namespace HieuFundingArbBot.Core
 {
     // Simulated executor — only logs; later integrate real order placement
