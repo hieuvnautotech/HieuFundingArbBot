@@ -17,15 +17,26 @@ namespace HieuFundingArbBot.Infra
         public string ChatId { get; set; } = "";
     }
 
+    // ⭐ NEW: API Config for Hyperliquid + others later
+    public class ApiConfig
+    {
+        public string HyperliquidApiKey { get; set; } = "";
+        public string HyperliquidSecret { get; set; } = "";
+    }
+
     public class AppConfig
     {
         public BotConfig BotConfig { get; set; } = new BotConfig();
         public TelegramConfig TelegramConfig { get; set; } = new TelegramConfig();
 
+        // ⭐ MUST HAVE: ApiConfig property
+        public ApiConfig ApiConfig { get; set; } = new ApiConfig();
+
         public static AppConfig LoadFromFile(string path)
         {
             var s = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<AppConfig>(s, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+            return JsonSerializer.Deserialize<AppConfig>(s,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
         }
     }
 

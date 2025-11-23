@@ -1,102 +1,87 @@
 using System.Net.Http;
-using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
-using HieuFundingArbBot.Infra;      // SimpleLogger
-using HieuFundingArbBot.Models;     // FundingRate
+using HieuFundingArbBot.Infra;
+using HieuFundingArbBot.Models;
+using HieuFundingArbBot.Interfaces;
 
 namespace HieuFundingArbBot.Exchanges.Hyperliquid
 {
-    public class HyperliquidRestClient
+    public class HyperliquidRestClient : IExchangeClient
     {
         private readonly HttpClient _http;
         private readonly SimpleLogger _logger;
 
-        public string ApiKey { get; }
-        public string Secret { get; }
+        public string Name => "Hyperliquid";
 
         public HyperliquidRestClient(string apiKey, string secret, SimpleLogger logger)
         {
-            ApiKey = apiKey;
-            Secret = secret;
             _logger = logger;
 
             _http = new HttpClient
             {
-                BaseAddress = new Uri(HyperliquidEndpoints.BaseRest)
+                BaseAddress = new Uri("https://api.hyperliquid.xyz")
             };
-
-            if (!string.IsNullOrWhiteSpace(apiKey))
-            {
-                _http.DefaultRequestHeaders.Add("API-KEY", ApiKey);
-            }
         }
 
-        // ----------------------------
-        // 1. Get Funding Rate REAL
-        // ----------------------------
-        public async Task<FundingRate?> GetFundingAsync(string symbol)
+        public async Task<FundingRate> GetFundingRateAsync(string symbol)
         {
             try
             {
-                var url = $"{HyperliquidEndpoints.Funding}?symbol={symbol}";
-                var res = await _http.GetAsync(url);
-                var body = await res.Content.ReadAsStringAsync();
-
-                if (!res.IsSuccessStatusCode)
+                var body = new
                 {
-                    _logger.Error($"HL Funding Error: {body}");
-                    return null;
-                }
-
-                // TODO: map JSON → FundingRate
-                var fr = new FundingRate
-                {
-                    Symbol = symbol,
-                    Rate = 0.00012, // placeholder, replace with JSON parsed value
-                    Timestamp = DateTime.UtcNow
+                    type = "activeAssetCtx",
+                    coin = "BTC"
                 };
 
-                return fr;
+                var req = new StringContent(
+                    JsonSerializer.Serialize(body),
+                    Encoding.UTF8,
+                    "application/json"
+                );
+
+                var res = await _http.PostAsync("/info", req);
+                var json = await res.Content.ReadAsStringAsync();
+
+                using var doc = JsonDocument.Parse(json);
+
+                // JSON format:
+                // [
+                //   "activeAssetCtx",
+                //   {
+                //     "coin":"BTC",
+                //     "ctx": { "funding": 0.00001 ... }
+                //   }
+                // ]
+                var ctx = doc.RootElement[1]
+                             .GetProperty("ctx");
+
+                double funding = ctx
+                                 .GetProperty("funding")
+                                 .GetDouble();
+
+                return new FundingRate
+                {
+                    Exchange = "Hyperliquid",
+                    Symbol = symbol,
+                    Rate = funding,
+                    Timestamp = DateTime.UtcNow,
+                    Source = "REST"
+                };
             }
             catch (Exception ex)
             {
-                _logger.Error("HL Funding exception: " + ex.Message);
-                return null;
+                _logger.Error("[HL REST] " + ex.Message);
+
+                return new FundingRate
+                {
+                    Exchange = "Hyperliquid",
+                    Symbol = symbol,
+                    Rate = 0,
+                    Timestamp = DateTime.UtcNow,
+                    Source = "REST-ERR"
+                };
             }
-        }
-
-        // ----------------------------
-        // 2. Get Positions
-        // ----------------------------
-        public async Task<string> GetPositionsAsync()
-        {
-            var res = await _http.GetAsync(HyperliquidEndpoints.Positions);
-            return await res.Content.ReadAsStringAsync();
-        }
-
-        // ----------------------------
-        // 3. Submit Order
-        // ----------------------------
-        public async Task<string> SubmitOrderAsync(object order)
-        {
-            var json = JsonSerializer.Serialize(order);
-            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-
-            var res = await _http.PostAsync(HyperliquidEndpoints.Order, content);
-            return await res.Content.ReadAsStringAsync();
-        }
-
-        // ----------------------------
-        // 4. Cancel Order
-        // ----------------------------
-        public async Task<string> CancelOrderAsync(string orderId)
-        {
-            var content = new StringContent($"{{\"orderId\":\"{orderId}\"}}",
-                System.Text.Encoding.UTF8, "application/json");
-
-            var res = await _http.PostAsync(HyperliquidEndpoints.Order + "/cancel", content);
-            return await res.Content.ReadAsStringAsync();
         }
     }
 }
