@@ -76,7 +76,7 @@ namespace HieuFundingArbBot.Core
             // ⭐ MAIN LOOP
             // -----------------------------
             while (!cts.IsCancellationRequested)
-            {
+{
     try
     {
         FundingRate hlFr;
@@ -129,6 +129,7 @@ namespace HieuFundingArbBot.Core
 
     await Task.Delay(_intervalMs, cts.Token);
 }
+
 
             _logger.Info("Engine stopped.");
         }

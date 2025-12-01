@@ -1,8 +1,8 @@
 using System.Net.Http;
 using System.Text.Json;
 using HieuFundingArbBot.Interfaces;
-using HieuFundingArbBot.Models;
 using HieuFundingArbBot.Infra;
+using HieuFundingArbBot.Models;
 
 namespace HieuFundingArbBot.Exchanges.Lighter
 {
@@ -10,6 +10,7 @@ namespace HieuFundingArbBot.Exchanges.Lighter
     {
         private readonly HttpClient _http = new HttpClient();
         private readonly SimpleLogger _logger;
+
         public string Name => "Lighter";
 
         public LighterRealClient(SimpleLogger logger)
@@ -21,7 +22,8 @@ namespace HieuFundingArbBot.Exchanges.Lighter
         {
             try
             {
-                var url = "https://mainnet.zklighter.elliot.ai/api/v1/funding-rates?symbol=BTC-PERP";
+                var url = "https://mainnet.zklighter.elliot.ai/api/v1/funding-rates";
+
                 var json = await _http.GetStringAsync(url);
 
                 using var doc = JsonDocument.Parse(json);
@@ -30,36 +32,40 @@ namespace HieuFundingArbBot.Exchanges.Lighter
                     .GetProperty("funding_rates")
                     .EnumerateArray();
 
-                // Lighter uses "BTC" instead of "BTC-PERP"
+                // Tìm entry symbol == "BTC"
+                double rate = 0;
+
                 foreach (var item in arr)
                 {
                     if (item.GetProperty("symbol").GetString() == "BTC")
                     {
-                        double rate = item.GetProperty("rate").GetDouble();
-
-                        return new FundingRate
-                        {
-                            Exchange = "Lighter",
-                            Symbol = "BTC-PERP",
-                            Rate = rate,
-                            Timestamp = DateTime.UtcNow,
-                            Source = "REST"
-                        };
+                        rate = item.GetProperty("rate").GetDouble();
+                        break;
                     }
                 }
 
-                throw new Exception("BTC not found in Lighter response");
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"[Lighter] Exception: {ex.Message}");
+                _logger.Debug($"[Lighter] REST funding = {rate:F8}");
+
                 return new FundingRate
                 {
                     Exchange = "Lighter",
-                    Symbol = symbol,
+                    Symbol = "BTC-PERP",
+                    Rate = rate,
+                    Timestamp = DateTime.UtcNow,
+                    Source = "REST"
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("[Lighter] Exception: " + ex.Message);
+
+                return new FundingRate
+                {
+                    Exchange = "Lighter",
+                    Symbol = "BTC-PERP",
                     Rate = 0,
                     Timestamp = DateTime.UtcNow,
-                    Source = "ERROR"
+                    Source = "ERR"
                 };
             }
         }
