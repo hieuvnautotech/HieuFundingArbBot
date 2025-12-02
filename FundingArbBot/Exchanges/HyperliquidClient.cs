@@ -1,7 +1,9 @@
 using HieuFundingArbBot.Interfaces;
-using HieuFundingArbBot.Models;
 using HieuFundingArbBot.Infra;
 using HieuFundingArbBot.Exchanges.Hyperliquid;
+using HieuFundingArbBot.Models;
+using System.Threading.Tasks;
+using FundingArbBot.Models;
 
 namespace HieuFundingArbBot.Exchanges
 {
@@ -16,22 +18,15 @@ namespace HieuFundingArbBot.Exchanges
         {
             Name = name;
             _logger = logger;
-
-            // dùng API thật — mày có thể truyền key từ Config
-            _rest = new HyperliquidRestClient(
-                apiKey: "",
-                secret: "",
-                logger
-            );
+            _rest = new HyperliquidRestClient(apiKey: "", secret: "", logger);
         }
 
         public async Task<FundingRate> GetFundingRateAsync(string symbol)
         {
             var fr = await _rest.GetFundingRateAsync(symbol);
-
             if (fr == null)
             {
-                _logger.Warn("[HL-REST] Funding null → dùng fallback 0");
+                _logger.Warn("[HL-REST] Funding null → fallback 0");
                 return new FundingRate
                 {
                     Exchange = "Hyperliquid",
@@ -41,8 +36,12 @@ namespace HieuFundingArbBot.Exchanges
                     Source = "REST"
                 };
             }
-
             return fr;
         }
+
+        // Forward order methods to the REST adapter (currently simulated)
+        public Task<OrderResult> PlaceOrderAsync(OrderRequest req) => _rest.PlaceOrderAsync(req);
+
+        public Task<OrderResult> CancelOrderAsync(string orderId) => _rest.CancelOrderAsync(orderId);
     }
 }

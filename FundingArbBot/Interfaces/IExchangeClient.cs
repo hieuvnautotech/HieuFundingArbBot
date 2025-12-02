@@ -1,3 +1,4 @@
+using FundingArbBot.Models;
 using HieuFundingArbBot.Models;
 
 namespace HieuFundingArbBot.Interfaces
@@ -7,5 +8,9 @@ namespace HieuFundingArbBot.Interfaces
         string Name { get; }
         Task<FundingRate> GetFundingRateAsync(string symbol);
         // Later: Task<OrderResult> PlaceOrderAsync(...)
+
+        // Orders
+        Task<OrderResult> PlaceOrderAsync(OrderRequest req);
+        Task<OrderResult> CancelOrderAsync(string orderId);
     }
 }
