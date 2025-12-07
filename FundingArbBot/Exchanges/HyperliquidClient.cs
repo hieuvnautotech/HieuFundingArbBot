@@ -4,6 +4,7 @@ using HieuFundingArbBot.Exchanges.Hyperliquid;
 using HieuFundingArbBot.Models;
 using System.Threading.Tasks;
 using FundingArbBot.Models;
+using FundingArbBot.Exchanges.Hyperliquid;
 
 namespace HieuFundingArbBot.Exchanges
 {

@@ -1,5 +1,5 @@
 // HieuFundingArbBot/Models/OrderResult.cs
-namespace HieuFundingArbBot.Models
+namespace FundingArbBot.Models
 {
     public class OrderResult
     {

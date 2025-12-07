@@ -18,55 +18,63 @@ namespace HieuFundingArbBot.Exchanges.Lighter
 
         public LighterRealClient(SimpleLogger logger)
         {
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _http.Timeout = TimeSpan.FromSeconds(10);
-            _http.DefaultRequestHeaders.UserAgent.ParseAdd("FundingArbBot/1.0");
+            _logger = logger;
         }
 
+        // ------------------------
+        // Funding rate (REST)
+        // ------------------------
         public async Task<FundingRate> GetFundingRateAsync(string symbol)
         {
-            string token = NormalizeSymbolToToken(symbol);
-
             try
             {
-                var url = "https://mainnet.zklighter.elliot.ai/api/v1/funding-rates";
+                var url = "https://mainnet.zklighter.elliot.ai/api/v1/funding-rates?symbol=BTC-PERP";
+
                 var json = await _http.GetStringAsync(url);
 
                 using var doc = JsonDocument.Parse(json);
 
-                if (!doc.RootElement.TryGetProperty("funding_rates", out var frArr))
-                {
-                    _logger.Warn("[Lighter] Response missing 'funding_rates' field");
-                    return FallbackFunding(symbol);
-                }
+                double foundRate = 0;
 
-                double rate = 0.0;
-                bool found = false;
-
-                foreach (var item in frArr.EnumerateArray())
+                if (doc.RootElement.TryGetProperty("funding_rates", out var arr) &&
+                    arr.ValueKind == JsonValueKind.Array)
                 {
-                    var itemSym = item.GetProperty("symbol").GetString() ?? "";
-                    if (SymbolsMatch(itemSym, token))
+                    foreach (var item in arr.EnumerateArray())
                     {
-                        rate = item.GetProperty("rate").GetDouble();
-                        found = true;
-                        break;
+                        var sym = item.TryGetProperty("symbol", out var sp) ? sp.GetString() : null;
+                        if (string.Equals(sym, "BTC", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(sym, "BTC-PERP", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (item.TryGetProperty("rate", out var rateProp))
+                            {
+                                if (rateProp.ValueKind == JsonValueKind.Number)
+                                {
+                                    foundRate = rateProp.GetDouble();
+                                }
+                                else if (rateProp.ValueKind == JsonValueKind.String)
+                                {
+                                    var s = rateProp.GetString();
+                                    if (!string.IsNullOrWhiteSpace(s) && double.TryParse(s, out var tmp))
+                                        foundRate = tmp;
+                                }
+                            }
+
+                            break;
+                        }
                     }
                 }
-
-                if (!found)
+                else
                 {
-                    _logger.Warn($"[Lighter] funding for {token} not found");
-                    return FallbackFunding(symbol);
+                    _logger.Warn("[Lighter] Unexpected JSON structure for funding_rates.");
                 }
 
-                _logger.Debug($"[Lighter] REST funding = {rate:F8}");
+                _logger.Debug($"[Lighter] REST funding = {foundRate:F8}");
 
                 return new FundingRate
                 {
                     Exchange = "Lighter",
-                    Symbol = symbol,
-                    Rate = rate,
+                    Symbol = "BTC-PERP",
+                    Rate = foundRate,
                     Timestamp = DateTime.UtcNow,
                     Source = "REST"
                 };
@@ -74,76 +82,73 @@ namespace HieuFundingArbBot.Exchanges.Lighter
             catch (Exception ex)
             {
                 _logger.Error("[Lighter] Exception: " + ex.Message);
-                return FallbackFunding(symbol);
+
+                return new FundingRate
+                {
+                    Exchange = "Lighter",
+                    Symbol = "BTC-PERP",
+                    Rate = 0,
+                    Timestamp = DateTime.UtcNow,
+                    Source = "ERR"
+                };
             }
         }
 
-        // -----------------------
-        // Orders (simulated)
-        // -----------------------
+        // ------------------------
+        // Place order (SIMULATED)
+        // ------------------------
+        // Implements IExchangeClient.PlaceOrderAsync(OrderRequest)
         public async Task<OrderResult> PlaceOrderAsync(OrderRequest req)
         {
-            _logger.Info($"[Lighter] Simulating PlaceOrder {req.Side} {req.Symbol} sizeUsd={req.SizeUsd}");
-            await Task.Delay(200);
-
-            // Note: req.Price may be nullable or not in your OrderRequest;
-            // if it's nullable, use req.Price ?? 0.0; if non-nullable, use req.Price.
-            double avgPrice = 0.0;
-            try { avgPrice = req.Price; } catch { /* fallback 0.0 */ }
-
-            return new OrderResult
+            try
             {
-                OrderId = Guid.NewGuid().ToString(),
-                Status = "filled",
-                FilledSizeUsd = req.SizeUsd,
-                AvgPrice = avgPrice,
-                Raw = "{\"sim\":\"lighter_ok\"}"
-            };
+                // For now we simulate order placement to avoid real funds usage.
+                _logger.Info($"[Lighter-API] Simulated PlaceOrder: {req.Side.ToUpper()} {req.Symbol} sizeUsd={req.SizeUsd}");
+                await Task.Delay(120);
+
+                var oid = "SIM-LG-" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+                var res = new OrderResult
+                {
+                    Success = true,
+                    OrderId = oid,
+                    Message = "SIMULATED"
+                };
+
+                _logger.Debug($"[Lighter-API] Simulated order id={oid}");
+
+                return res;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("[Lighter-API] PlaceOrder error: " + ex.Message);
+                return new OrderResult { Success = false, OrderId = null, Message = ex.Message };
+            }
         }
 
+        // ------------------------
+        // Cancel order (SIMULATED)
+        // ------------------------
+        // Implements IExchangeClient.CancelOrderAsync(string)
         public async Task<OrderResult> CancelOrderAsync(string orderId)
         {
-            _logger.Info($"[Lighter] Simulating CancelOrder {orderId}");
-            await Task.Delay(100);
-
-            return new OrderResult
+            try
             {
-                OrderId = orderId,
-                Status = "cancelled",
-                FilledSizeUsd = 0.0,
-                AvgPrice = 0.0,
-                Raw = "{\"sim_cancel\":\"ok\"}"
-            };
-        }
+                _logger.Info($"[Lighter-API] Simulated CancelOrder: {orderId}");
+                await Task.Delay(80);
 
-        // -----------------------
-        // Helpers
-        // -----------------------
-        private FundingRate FallbackFunding(string symbol)
-        {
-            return new FundingRate
+                return new OrderResult
+                {
+                    Success = true,
+                    OrderId = orderId,
+                    Message = "CANCELLED-SIMULATED"
+                };
+            }
+            catch (Exception ex)
             {
-                Exchange = "Lighter",
-                Symbol = symbol,
-                Rate = 0,
-                Timestamp = DateTime.UtcNow,
-                Source = "ERR"
-            };
-        }
-
-        private static string NormalizeSymbolToToken(string symbol)
-        {
-            if (string.IsNullOrWhiteSpace(symbol)) return "BTC";
-            var parts = symbol.Split('-', StringSplitOptions.RemoveEmptyEntries);
-            return parts.Length > 0 ? parts[0].ToUpperInvariant() : symbol.ToUpperInvariant();
-        }
-
-        private static bool SymbolsMatch(string itemSymbol, string token)
-        {
-            if (string.IsNullOrEmpty(itemSymbol) || string.IsNullOrEmpty(token)) return false;
-            if (itemSymbol.Equals(token, StringComparison.OrdinalIgnoreCase)) return true;
-            if (itemSymbol.StartsWith(token + "-", StringComparison.OrdinalIgnoreCase)) return true;
-            return false;
+                _logger.Error("[Lighter-API] CancelOrder error: " + ex.Message);
+                return new OrderResult { Success = false, OrderId = orderId, Message = ex.Message };
+            }
         }
     }
 }

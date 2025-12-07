@@ -9,6 +9,7 @@ using HieuFundingArbBot.Core;
 using HieuFundingArbBot.Interfaces;
 using HieuFundingArbBot.Exchanges.Hyperliquid;
 using HieuFundingArbBot.Exchanges.Lighter;
+using HieuFundingArbBot.Exchanges.Hyperliquid;
 
 class Program
 {
@@ -30,8 +31,11 @@ class Program
 
         var tel = new TelegramNotifier(config.TelegramConfig, logger);
 
-        IExchangeClient hl = new HyperliquidRestClient("", "", logger);
-        IExchangeClient lighter = new LighterRealClient(logger);
+        // Tạm thời dùng wrapper HyperliquidClient (simulated/adapter).
+// Sau này khi HyperliquidRestClient đầy đủ, đổi lại.
+IExchangeClient hl = new HyperliquidClient("Hyperliquid", logger);
+        // Lighter real client (we implemented simulated Place/Cancel there).
+IExchangeClient lighter = new LighterRealClient(logger);
 
         var spreadDetector = new SpreadDetector(logger, config.BotConfig.SpreadThreshold);
         var riskManager = new RiskManager(logger, config.BotConfig.PositionSizeUsd);
