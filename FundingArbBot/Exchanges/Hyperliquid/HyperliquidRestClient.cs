@@ -3,18 +3,13 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-
-using FundingArbBot.Models;
-using HieuFundingArbBot.Exchanges.Hyperliquid;
-using HieuFundingArbBot.Infra;
+using HieuFundingArbBot.Infra;      // SimpleLogger
+using HieuHieuFundingArbBot.Models;     // FundingRate, OrderRequest, OrderResult
 using HieuFundingArbBot.Interfaces;
 using HieuFundingArbBot.Models;
 
-
-namespace FundingArbBot.Exchanges.Hyperliquid
-
+namespace HieuFundingArbBot.Exchanges.Hyperliquid
 {
-    // Hyperliquid REST adapter (safer/simulated order calls)
     public class HyperliquidRestClient : IExchangeClient
     {
         private readonly HttpClient _http;
@@ -22,24 +17,30 @@ namespace FundingArbBot.Exchanges.Hyperliquid
 
         public string Name => "Hyperliquid";
 
+        // optional credentials (not used for pure /info funding)
+        public string ApiKey { get; }
+        public string Secret { get; }
+
         public HyperliquidRestClient(string apiKey, string secret, SimpleLogger logger)
         {
-            _logger = logger;
+            ApiKey = apiKey ?? "";
+            Secret = secret ?? "";
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
             _http = new HttpClient
             {
                 BaseAddress = new Uri(HyperliquidEndpoints.BaseRest)
             };
 
-            // If endpoints require API-key header, add here (optional)
-            if (!string.IsNullOrWhiteSpace(apiKey))
+            if (!string.IsNullOrWhiteSpace(ApiKey))
             {
-                // Example header — adjust to HL API if/when required
-                _http.DefaultRequestHeaders.Add("API-KEY", apiKey);
+                // add header if API requires it for future endpoints
+                _http.DefaultRequestHeaders.Add("API-KEY", ApiKey);
             }
         }
 
         // ----------------------------
-        // 1) Get Funding Rate (REST)
+        // 1. Get Funding Rate REAL (robust)
         // ----------------------------
         public async Task<FundingRate> GetFundingRateAsync(string symbol)
         {
@@ -64,28 +65,55 @@ namespace FundingArbBot.Exchanges.Hyperliquid
 
                 double funding = 0;
 
-                // Common HL response is an array: [ "activeAssetCtx", { ctx } ]
+                // Some responses are arrays: [ "activeAssetCtx", { ctx } ]
                 if (doc.RootElement.ValueKind == JsonValueKind.Array && doc.RootElement.GetArrayLength() >= 2)
                 {
-                    var ctxElem = doc.RootElement[1].GetProperty("ctx");
+                    var second = doc.RootElement[1];
 
-                    if (ctxElem.TryGetProperty("funding", out var fundingProp))
+                    if (second.TryGetProperty("ctx", out var ctx))
                     {
-                        // funding may be number or string
-                        if (fundingProp.ValueKind == JsonValueKind.Number)
+                        if (ctx.TryGetProperty("funding", out var fundingProp))
                         {
-                            funding = fundingProp.GetDouble();
+                            if (fundingProp.ValueKind == JsonValueKind.Number)
+                            {
+                                funding = fundingProp.GetDouble();
+                            }
+                            else if (fundingProp.ValueKind == JsonValueKind.String)
+                            {
+                                var s = fundingProp.GetString();
+                                if (!double.TryParse(s, out funding))
+                                    funding = 0;
+                            }
                         }
-                        else if (fundingProp.ValueKind == JsonValueKind.String &&
-                                 double.TryParse(fundingProp.GetString(), out var tmp))
+                        else
                         {
-                            funding = tmp;
+                            _logger.Warn("[HL REST] /info.ctx has no 'funding' property");
                         }
+                    }
+                    else
+                    {
+                        _logger.Warn("[HL REST] /info missing 'ctx' object");
+                    }
+                }
+                else if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    // fallback: sometimes API returns object with ctx directly
+                    if (doc.RootElement.TryGetProperty("ctx", out var ctx2) &&
+                        ctx2.TryGetProperty("funding", out var fundingProp2))
+                    {
+                        if (fundingProp2.ValueKind == JsonValueKind.Number)
+                            funding = fundingProp2.GetDouble();
+                        else if (fundingProp2.ValueKind == JsonValueKind.String)
+                            double.TryParse(fundingProp2.GetString(), out funding);
+                    }
+                    else
+                    {
+                        _logger.Warn("[HL REST] /info unexpected object format");
                     }
                 }
                 else
                 {
-                    _logger.Warn("[HL REST] Unexpected /info response format (not array)");
+                    _logger.Warn("[HL REST] /info unexpected JSON kind: " + doc.RootElement.ValueKind);
                 }
 
                 return new FundingRate
@@ -111,40 +139,30 @@ namespace FundingArbBot.Exchanges.Hyperliquid
             }
         }
 
-        // ----------------------------
-        // 2) Get Positions (simple)
-        // ----------------------------
-        public async Task<string> GetPositionsAsync()
-        {
-            try
-            {
-                var res = await _http.GetAsync(HyperliquidEndpoints.Positions);
-                return await res.Content.ReadAsStringAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("[HL REST] GetPositions error: " + ex.Message);
-                return string.Empty;
-            }
-        }
-
-        // ----------------------------
-        // 3) Submit Order (SIMULATED / safe)
-        // ----------------------------
-        // Note: keep this simulated until you confirm exact HL order API and OrderRequest fields.
+        // -------------------------
+        // 2. Submit Order (SIMULATED)
+        // -------------------------
+        // Uses the project's OrderRequest / OrderResult models (HieuHieuFundingArbBot.Models).
+        // Currently simulation — safe to call for testing with tiny sizes (e.g. 1 USD).
         public async Task<OrderResult> PlaceOrderAsync(OrderRequest req)
         {
-            // Defensive: avoid referencing fields that may not exist on OrderRequest in your codebase.
             try
             {
-                // Build a minimal log-friendly description using the common fields.
-                var side = (req?.Side ?? "unknown").ToString();
-                var market = !string.IsNullOrEmpty(req?.Market) ? req.Market : (req?.Symbol ?? "unknown");
-                var sizeUsd = req?.SizeUsd ?? 0.0;
+                // Basic validation to avoid accidental huge orders
+                if (req == null) throw new ArgumentNullException(nameof(req));
+                if (req.SizeUsd <= 0)
+                {
+                    return new OrderResult
+                    {
+                        Success = false,
+                        OrderId = null,
+                        Message = "Invalid sizeUsd",
+                        Raw = null
+                    };
+                }
 
-                _logger.Info($"[HL-API] (SIM) PlaceOrder: side={side}, market={market}, sizeUsd={sizeUsd}");
-
-                // simulate latency
+                // Log and simulate network latency
+                _logger.Info($"[HL-API] (SIM) PlaceOrder: side={req.Side} symbol={req.Symbol} sizeUsd={req.SizeUsd} market={req.Market}");
                 await Task.Delay(120);
 
                 var oid = "SIM-HL-" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -154,29 +172,34 @@ namespace FundingArbBot.Exchanges.Hyperliquid
                     Success = true,
                     OrderId = oid,
                     Message = "SIMULATED",
-                    Raw = $"{{\"sim\":\"placed\",\"side\":\"{side}\",\"market\":\"{market}\",\"sizeUsd\":{sizeUsd}}}"
+                    Raw = null
                 };
             }
             catch (Exception ex)
             {
-                _logger.Error("[HL-API] PlaceOrder exception: " + ex.Message);
+                _logger.Error("[HL-API] PlaceOrder error: " + ex.Message);
                 return new OrderResult
                 {
                     Success = false,
                     OrderId = null,
                     Message = ex.Message,
-                    Raw = ""
+                    Raw = null
                 };
             }
         }
 
-        // ----------------------------
-        // 4) Cancel Order (SIMULATED / safe)
-        // ----------------------------
+        // -------------------------
+        // 3. Cancel Order (SIMULATED)
+        // -------------------------
         public async Task<OrderResult> CancelOrderAsync(string orderId)
         {
             try
             {
+                if (string.IsNullOrWhiteSpace(orderId))
+                {
+                    return new OrderResult { Success = false, OrderId = orderId, Message = "orderId empty", Raw = null };
+                }
+
                 _logger.Info($"[HL-API] (SIM) CancelOrder: {orderId}");
                 await Task.Delay(80);
 
@@ -185,20 +208,19 @@ namespace FundingArbBot.Exchanges.Hyperliquid
                     Success = true,
                     OrderId = orderId,
                     Message = "CANCELLED-SIMULATED",
-                    Raw = $"{{\"sim\":\"cancelled\",\"orderId\":\"{orderId}\"}}"
+                    Raw = null
                 };
             }
             catch (Exception ex)
             {
-                _logger.Error("[HL-API] CancelOrder exception: " + ex.Message);
-                return new OrderResult
-                {
-                    Success = false,
-                    OrderId = orderId,
-                    Message = ex.Message,
-                    Raw = ""
-                };
+                _logger.Error("[HL-API] CancelOrder error: " + ex.Message);
+                return new OrderResult { Success = false, OrderId = orderId, Message = ex.Message, Raw = null };
             }
         }
+
+        // -------------------------
+        // 4. (Optional) helper to call real order endpoint later
+        // -------------------------
+        // You can add a method here to build signed requests (if HL requires HMAC) and call real order endpoints.
     }
 }

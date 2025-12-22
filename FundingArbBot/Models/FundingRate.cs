@@ -1,4 +1,4 @@
-namespace HieuFundingArbBot.Models
+namespace HieuHieuFundingArbBot.Models
 {
     public class FundingRate
     {

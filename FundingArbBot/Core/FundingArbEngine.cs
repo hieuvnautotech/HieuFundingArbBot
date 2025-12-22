@@ -1,7 +1,7 @@
 using HieuFundingArbBot.Interfaces;
 using HieuFundingArbBot.Infra;
 using HieuFundingArbBot.Exchanges.Hyperliquid;
-using HieuFundingArbBot.Models;
+using HieuHieuFundingArbBot.Models;
 
 namespace HieuFundingArbBot.Core
 {

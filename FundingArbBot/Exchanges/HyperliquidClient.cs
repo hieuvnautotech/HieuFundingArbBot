@@ -1,13 +1,12 @@
 using HieuFundingArbBot.Interfaces;
+using HieuHieuFundingArbBot.Models;
 using HieuFundingArbBot.Infra;
 using HieuFundingArbBot.Exchanges.Hyperliquid;
 using HieuFundingArbBot.Models;
-using System.Threading.Tasks;
-using FundingArbBot.Models;
-using FundingArbBot.Exchanges.Hyperliquid;
 
 namespace HieuFundingArbBot.Exchanges
 {
+    // Wrapper / adapter - uses HyperliquidRestClient internally
     public class HyperliquidClient : IExchangeClient
     {
         private readonly SimpleLogger _logger;
@@ -19,15 +18,22 @@ namespace HieuFundingArbBot.Exchanges
         {
             Name = name;
             _logger = logger;
-            _rest = new HyperliquidRestClient(apiKey: "", secret: "", logger);
+
+            // Nếu muốn truyền credentials, thay "" bằng config values
+            _rest = new HyperliquidRestClient(
+                apiKey: "",
+                secret: "",
+                logger
+            );
         }
 
         public async Task<FundingRate> GetFundingRateAsync(string symbol)
         {
             var fr = await _rest.GetFundingRateAsync(symbol);
+
             if (fr == null)
             {
-                _logger.Warn("[HL-REST] Funding null → fallback 0");
+                _logger.Warn("[HL-REST] Funding null → dùng fallback 0");
                 return new FundingRate
                 {
                     Exchange = "Hyperliquid",
@@ -37,12 +43,16 @@ namespace HieuFundingArbBot.Exchanges
                     Source = "REST"
                 };
             }
+
             return fr;
         }
 
-        // Forward order methods to the REST adapter (currently simulated)
-        public Task<OrderResult> PlaceOrderAsync(OrderRequest req) => _rest.PlaceOrderAsync(req);
+        // Nếu IExchangeClient yêu cầu PlaceOrder/CancelOrder, implement chuyển tiếp tới _rest
+        // (các method dưới là tùy project; xóa nếu interface không cần)
+        public Task<OrderResult> PlaceOrderAsync(OrderRequest req)
+            => _rest.PlaceOrderAsync(req);
 
-        public Task<OrderResult> CancelOrderAsync(string orderId) => _rest.CancelOrderAsync(orderId);
+        public Task<OrderResult> CancelOrderAsync(string orderId)
+            => _rest.CancelOrderAsync(orderId);
     }
 }

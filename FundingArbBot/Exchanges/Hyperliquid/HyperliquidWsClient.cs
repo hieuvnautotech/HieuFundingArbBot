@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Globalization;
 using HieuFundingArbBot.Infra;      // SimpleLogger
-using HieuFundingArbBot.Models;     // FundingRate
+using HieuHieuFundingArbBot.Models;     // FundingRate
 
 namespace HieuFundingArbBot.Exchanges.Hyperliquid
 {

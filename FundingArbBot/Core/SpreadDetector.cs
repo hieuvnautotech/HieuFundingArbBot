@@ -1,4 +1,4 @@
-using HieuFundingArbBot.Models;
+using HieuHieuFundingArbBot.Models;
 using HieuFundingArbBot.Infra;
 namespace HieuFundingArbBot.Core
 {

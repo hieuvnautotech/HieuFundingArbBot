@@ -4,8 +4,8 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using HieuFundingArbBot.Interfaces;
 using HieuFundingArbBot.Infra;
+using HieuHieuFundingArbBot.Models;
 using HieuFundingArbBot.Models;
-using FundingArbBot.Models;
 
 namespace HieuFundingArbBot.Exchanges.Lighter
 {

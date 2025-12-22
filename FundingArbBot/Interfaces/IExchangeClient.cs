@@ -1,5 +1,5 @@
-using FundingArbBot.Models;
 using HieuFundingArbBot.Models;
+using HieuHieuFundingArbBot.Models;
 
 namespace HieuFundingArbBot.Interfaces
 {
